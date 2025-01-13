@@ -6,7 +6,7 @@ from threading import Thread
 
 # Укажите ваш токен бота
 TELEGRAM_BOT_TOKEN = "7825529193:AAGKdoPMszeNFnZ50ur0IAJ0K_Myp2g1B7k"
-CHANNEL_ID = "@RuslanPsiholoa"  # Укажите ID или username канала
+CHANNEL_ID = "@checkhyppo"  # Укажите ID или username канала
 USER_ID = "@lkji33"  # Укажите username или ID пользователя для уведомлений
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
