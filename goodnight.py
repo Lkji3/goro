@@ -239,7 +239,7 @@ try:
     images_base64 = api.check_generation(uuid)
 
     bot_token = '7825529193:AAGKdoPMszeNFnZ50ur0IAJ0K_Myp2g1B7k'  # Токен вашего Telegram бота
-    channel_id = '@RuslanPsiholoa'  # ID вашего канала (с @ на начале)
+    channel_id = '@checkhyppo'  # ID вашего канала (с @ на начале)
 
     # Форматируем текст сообщения
     caption = post  # Убедитесь, что переменная `post` заранее заполнена
