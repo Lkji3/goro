@@ -70,7 +70,7 @@ def generate_stars():
 
 # Генерация и отправка гороскопов
 bot_token = '7825529193:AAGKdoPMszeNFnZ50ur0IAJ0K_Myp2g1B7k'
-channel_id = '@RuslanPsiholoa'
+channel_id = '@checkhyppo'
 signs = list(zodiac_emojis.keys())
 
 for sign in signs:
