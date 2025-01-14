@@ -100,6 +100,6 @@ for sign in signs:
         print(f"Ошибка при отправке гороскопа для {sign}: {telegram_response.text}")
     
     # Добавляем задержку перед отправкой следующего знака
-    delay = random.randint(0, 30)  # Задержка в секундах (от 2 до 7 минут)
+    delay = random.randint(0, 120)  # Задержка в секундах (от 2 до 7 минут)
     print(f"Задержка перед следующим знаком: {delay} секунд.")
     time.sleep(delay)
