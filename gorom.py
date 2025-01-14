@@ -70,7 +70,7 @@ def generate_stars():
 
 # Генерация и отправка гороскопов
 bot_token = '7825529193:AAGKdoPMszeNFnZ50ur0IAJ0K_Myp2g1B7k'
-channel_id = '@RuslanPsiholoa'
+channel_id = '@checkhyppo'
 signs = list(zodiac_emojis.keys())
 
 for sign in signs:
@@ -100,6 +100,6 @@ for sign in signs:
         print(f"Ошибка при отправке гороскопа для {sign}: {telegram_response.text}")
     
     # Добавляем задержку перед отправкой следующего знака
-    delay = random.randint(0, 1)  # Задержка в секундах (от 2 до 7 минут)
+    delay = random.randint(0, 30)  # Задержка в секундах (от 2 до 7 минут)
     print(f"Задержка перед следующим знаком: {delay} секунд.")
     time.sleep(delay)
