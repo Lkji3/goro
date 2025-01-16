@@ -40,8 +40,8 @@ zodiac_emojis = {
     "Стрелец": "♐", "Козерог": "♑", "Водолей": "♒", "Рыбы": "♓"
 }
 
-# Генерация короткого гороскопа
-def generate_horoscope_for_sign(sign):
+# Генерация короткого гороскопа с повторными попытками
+def generate_horoscope_for_sign(sign, retries=10, delay=5):
     prompt = f"""
     Придумай легкий и краткий гороскоп для знака зодиака {sign} на завтра ({tomorrow_date}).
     Гороскоп должен быть из 1–3 предложений, позитивный или нейтральный. Без эмодзи в тексте.
@@ -56,13 +56,16 @@ def generate_horoscope_for_sign(sign):
         "model": "GigaChat",
         "messages": [{"role": "user", "content": prompt}]
     }
-    chat_response = requests.post(chat_url, headers=chat_headers, json=chat_data, verify=False)
-    if chat_response.status_code == 200:
-        response_data = chat_response.json()
-        return response_data['choices'][0]['message']['content']
-    else:
-        print(f"Ошибка при получении ответа от GigaChat: {chat_response.text}")
-        return "Не удалось сгенерировать гороскоп."
+    
+    for attempt in range(retries):
+        chat_response = requests.post(chat_url, headers=chat_headers, json=chat_data, verify=False)
+        if chat_response.status_code == 200:
+            response_data = chat_response.json()
+            return response_data['choices'][0]['message']['content']
+        else:
+            print(f"Ошибка при получении ответа от GigaChat, попытка {attempt + 1} из {retries}: {chat_response.text}")
+            time.sleep(delay)  # Задержка перед повторной попыткой
+    return "Не удалось сгенерировать гороскоп."
 
 # Генерация оценок звёздочками
 def generate_stars():
@@ -100,6 +103,6 @@ for sign in signs:
         print(f"Ошибка при отправке гороскопа для {sign}: {telegram_response.text}")
     
     # Добавляем задержку перед отправкой следующего знака
-    delay = random.randint(15, 45)  # Задержка в секундах (от 2 до 7 минут)
+    delay = random.randint(0, 30)  # Задержка в секундах (от 2 до 7 минут)
     print(f"Задержка перед следующим знаком: {delay} секунд.")
     time.sleep(delay)
