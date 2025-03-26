@@ -5,8 +5,8 @@ from telegram import Bot
 from threading import Thread
 
 # Укажите ваш токен бота
-TELEGRAM_BOT_TOKEN = "7825529193:AAGKdoPMszeNFnZ50ur0IAJ0K_Myp2g1B7k"
-CHANNEL_ID = "@checkhyppo"  # Укажите ID или username канала
+TELEGRAM_BOT_TOKEN = "7825529193:AAH06S3J0b5NhvxqXI8UK7vte-HTddsC7vc"
+CHANNEL_ID = "@hyppolove"  # Укажите ID или username канала
 USER_ID = "@lkji33"  # Укажите username или ID пользователя для уведомлений
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
@@ -27,7 +27,7 @@ def send_message(script_name, time):
 def schedule_scripts():
     # Расписание выполнения скриптов
     schedule.every().day.at("07:00").do(send_message, script_name="goodmorning.py", time="07:00")
-    schedule.every().day.at("20:00").do(send_message, script_name="gorom.py", time="20:00")
+    schedule.every().day.at("20:30").do(send_message, script_name="1.py", time="20:00")
     schedule.every().day.at("23:00").do(send_message, script_name="goodnight.py", time="23:00")
 
     while True:
