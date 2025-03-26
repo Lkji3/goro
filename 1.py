@@ -1,146 +1,218 @@
-import requests
-from bs4 import BeautifulSoup
-from telegram import Bot
-from telegram.error import RetryAfter
-import asyncio
+import os
+import logging
+from datetime import time, datetime
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters
+)
+import subprocess
 
-# Токен вашего бота
-BOT_TOKEN = "7825529193:AAH06S3J0b5NhvxqXI8UK7vte-HTddsC7vc"
-# ID вашего канала (например, @your_channel_name)
-CHANNEL_ID = "@hyppolove"
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler("script_bot.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
-# Список знаков зодиака с эмодзи
-ZODIAC_SIGNS = {
-    "Овен": {"number": 1, "emoji": "♈️"},
-    "Телец": {"number": 2, "emoji": "♉️"},
-    "Близнецы": {"number": 3, "emoji": "♊️"},
-    "Рак": {"number": 4, "emoji": "♋️"},
-    "Лев": {"number": 5, "emoji": "♌️"},
-    "Дева": {"number": 6, "emoji": "♍️"},
-    "Весы": {"number": 7, "emoji": "♎️"},
-    "Скорпион": {"number": 8, "emoji": "♏️"},
-    "Стрелец": {"number": 9, "emoji": "♐️"},
-    "Козерог": {"number": 10, "emoji": "♑️"},
-    "Водолей": {"number": 11, "emoji": "♒️"},
-    "Рыбы": {"number": 12, "emoji": "♓️"},
+# Конфигурация
+TOKEN = "7825529193:AAH06S3J0b5NhvxqXI8UK7vte-HTddsC7vc"  # Замените на токен от @BotFather
+YOUR_USERNAME = "lkji33"  # Ваш Telegram username (без @)
+SCRIPT_PATHS = {
+    "morning": "goodmorning.py",
+    "day": "1.py",
+    "night": "goodnight.py",
 }
 
-# Функция для получения гороскопа на завтра
-def get_horoscope(sign: int, day: str = "tomorrow") -> str:
-    """
-    Получает гороскоп для указанного знака зодиака и дня.
-    :param sign: Номер знака зодиака (1-12).
-    :param day: День (tomorrow, today, yesterday или дата в формате ГГГГ-ММ-ДД).
-    :return: Текст гороскопа.
-    """
-    url = f"https://www.horoscope.com/us/horoscopes/general/horoscope-general-daily-{day}.aspx?sign={sign}"
-    response = requests.get(url)
-    
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, "html.parser")
-        horoscope_text = soup.find("div", class_="main-horoscope")
-        if horoscope_text:
-            return horoscope_text.p.text.strip()
-    return "Гороскоп не найден."
+# Расписание выполнения
+SCHEDULE = {
+    "morning": time(7, 0),  # 7:00
+    "day": time(20, 0),     # 20:00
+    "night": time(23, 0),   # 23:00
+}
 
-# Функция для перевода даты с английского на русский
-def translate_date(date: str) -> str:
-    """
-    Переводит дату с английского на русский и убирает год.
-    Пример: "Mar 23, 2025" → "23 марта".
-    """
-    month_translation = {
-        "Jan": "января",
-        "Feb": "февраля",
-        "Mar": "марта",
-        "Apr": "апреля",
-        "May": "мая",
-        "Jun": "июня",
-        "Jul": "июля",
-        "Aug": "августа",
-        "Sep": "сентября",
-        "Oct": "октября",
-        "Nov": "ноября",
-        "Dec": "декабря",
+# Клавиатура с кнопками
+KEYBOARD = ReplyKeyboardMarkup(
+    [["☀ Утро", "🌆 День", "🌙 Ночь"]],
+    resize_keyboard=True,
+    one_time_keyboard=False
+)
+
+def run_script(script_name: str) -> dict:
+    """Запускает скрипт и возвращает результат"""
+    result = {
+        "success": False,
+        "output": "",
+        "error": "",
+        "script": script_name,
+        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "filename": SCRIPT_PATHS.get(script_name, "unknown"),
     }
-    # Разделяем дату на части
-    parts = date.split()
-    if len(parts) == 3:
-        month_en, day, year = parts
-        # Переводим месяц
-        month_ru = month_translation.get(month_en, month_en)
-        # Возвращаем дату в формате "число месяц"
-        return f"{day} {month_ru}"
-    return date  # Если формат даты не распознан, возвращаем оригинал
 
-# Функция для извлечения даты из текста гороскопа
-def extract_date(text: str) -> str:
-    """
-    Извлекает дату из текста гороскопа и переводит её на русский.
-    """
-    if " - " in text:
-        date_part = text.split(" - ", 1)[0]  # Берем часть до " - "
-        # Переводим дату на русский
-        return translate_date(date_part)
-    return ""
+    if script_name not in SCRIPT_PATHS:
+        result["error"] = "Скрипт не найден в конфигурации"
+        return result
 
-# Функция для очистки текста от даты и года
-def clean_horoscope_text(text: str) -> str:
-    """
-    Удаляет дату и год из текста гороскопа.
-    """
-    if " - " in text:
-        text = text.split(" - ", 1)[1]  # Берем часть после даты
-    return text
+    script_path = SCRIPT_PATHS[script_name]
+    if not os.path.exists(script_path):
+        result["error"] = f"Файл {script_path} не существует"
+        return result
 
-# Функция для перевода текста с помощью MyMemory API
-def translate_to_russian(text: str) -> str:
-    """
-    Переводит текст на русский с помощью MyMemory API.
-    """
-    url = "https://api.mymemory.translated.net/get"
-    params = {
-        "q": text,
-        "langpair": "en|ru"  # Переводим с английского на русский
+    try:
+        process = subprocess.run(
+            ["python", script_path],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        result.update({
+            "output": process.stdout.strip(),
+            "error": process.stderr.strip(),
+            "success": True
+        })
+    except subprocess.CalledProcessError as e:
+        result.update({
+            "output": e.stdout.strip(),
+            "error": e.stderr.strip(),
+            "success": False
+        })
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result
+
+async def send_log_to_user(update: Update, result: dict):
+    """Отправляет лог выполнения"""
+    try:
+        status = "✅ УСПЕШНО" if result["success"] else "❌ ОШИБКА"
+        message = (
+            f"🕒 Время: {result['time']}\n"
+            f"📜 Скрипт: {result['script']} ({result['filename']})\n"
+            f"🔹 Статус: {status}\n"
+        )
+
+        if result["output"]:
+            message += f"\n📝 Вывод:\n{result['output']}\n"
+        if result["error"]:
+            message += f"\n⚠ Ошибки:\n{result['error']}\n"
+
+        await update.message.reply_text(message, reply_markup=KEYBOARD)
+    except Exception as e:
+        logger.error(f"Ошибка при отправке сообщения: {e}")
+
+async def callback_morning(context: ContextTypes.DEFAULT_TYPE):
+    """Утренний скрипт"""
+    result = run_script("morning")
+    await send_log_to_user(context.job, result)
+
+async def callback_day(context: ContextTypes.DEFAULT_TYPE):
+    """Дневной скрипт"""
+    result = run_script("day")
+    await send_log_to_user(context.job, result)
+
+async def callback_night(context: ContextTypes.DEFAULT_TYPE):
+    """Вечерний скрипт"""
+    result = run_script("night")
+    await send_log_to_user(context.job, result)
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Инициализация бота"""
+    if update.effective_user.username != YOUR_USERNAME:
+        await update.message.reply_text("⛔ Доступ запрещен!")
+        return
+
+    # Удаляем старые задания
+    for job in context.job_queue.jobs():
+        job.schedule_removal()
+
+    # Добавляем новые задания
+    context.job_queue.run_daily(callback_morning, time=SCHEDULE["morning"])
+    context.job_queue.run_daily(callback_day, time=SCHEDULE["day"])
+    context.job_queue.run_daily(callback_night, time=SCHEDULE["night"])
+
+    await update.message.reply_text(
+        "🤖 Бот запущен! Расписание:\n"
+        f"☀ Утро 07:00 - goodmorning.py\n"
+        f"🌆 День 20:00 - 1.py\n"
+        f"🌙 Ночь 23:00 - goodnight.py\n\n"
+        "Используйте кнопки ниже для запуска скриптов:",
+        reply_markup=KEYBOARD
+    )
+
+async def manual_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ручной запуск скрипта через команду"""
+    if update.effective_user.username != YOUR_USERNAME:
+        await update.message.reply_text("⛔ Доступ запрещен!")
+        return
+
+    if not context.args:
+        await update.message.reply_text("Используйте: /run <morning|day|night>")
+        return
+
+    script_name = context.args[0].lower()
+    if script_name not in SCRIPT_PATHS:
+        await update.message.reply_text("Доступные скрипты: morning, day, night")
+        return
+
+    await update.message.reply_text(f"⏳ Запускаю {script_name}...")
+    result = run_script(script_name)
+    await send_log_to_user(update, result)
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик нажатий кнопок"""
+    if update.effective_user.username != YOUR_USERNAME:
+        await update.message.reply_text("⛔ Доступ запрещен!")
+        return
+
+    text = update.message.text
+    script_map = {
+        "☀ Утро": "morning",
+        "🌆 День": "day",
+        "🌙 Ночь": "night"
     }
-    response = requests.get(url, params=params)
-    
-    if response.status_code == 200:
-        data = response.json()
-        if data.get("responseData"):
-            return data["responseData"]["translatedText"]
-    return text  # Возвращаем оригинальный текст в случае ошибки
 
-# Асинхронная функция для публикации гороскопов
-async def publish_horoscopes():
-    bot = Bot(token=BOT_TOKEN)
-    while True:
-        for sign_name, sign_data in ZODIAC_SIGNS.items():
-            try:
-                # Получаем гороскоп на завтра
-                horoscope_text = get_horoscope(sign_data["number"], "tomorrow")
-                # Извлекаем дату и переводим её
-                date = extract_date(horoscope_text)
-                # Очищаем текст от даты и года
-                horoscope_text_cleaned = clean_horoscope_text(horoscope_text)
-                # Переводим текст на русский
-                horoscope_text_ru = translate_to_russian(horoscope_text_cleaned)
-                # Формируем сообщение в формате "Знак зодиака, дата:\nописание"
-                message = f"{sign_data['emoji']} {sign_name}, {date}:\n{horoscope_text_ru}"
-                # Отправляем сообщение в канал
-                await bot.send_message(chat_id=CHANNEL_ID, text=message)
-                # Ждем 30 секунд между сообщениями, чтобы избежать блокировки
-                await asyncio.sleep(0)
-            except RetryAfter as e:
-                # Если Telegram просит подождать, ждем указанное время
-                await asyncio.sleep(e.retry_after)
-            except Exception as e:
-                # Логируем другие ошибки
-                print(f"Ошибка: {e}")
+    if text not in script_map:
+        await update.message.reply_text("Используйте кнопки для запуска скриптов")
+        return
 
-# Запуск бота
-async def main():
-    await publish_horoscopes()
+    script_name = script_map[text]
+    await update.message.reply_text(f"⏳ Запускаю {script_name} скрипт...")
+    result = run_script(script_name)
+    await send_log_to_user(update, result)
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка ошибок"""
+    logger.error(f"Ошибка: {context.error}")
+    if update and isinstance(update, Update):
+        if update.effective_user.username == YOUR_USERNAME:
+            await update.message.reply_text(
+                f"⚠ Ошибка: {context.error}",
+                reply_markup=KEYBOARD
+            )
+
+def main():
+    """Основная функция запуска"""
+    try:
+        application = Application.builder().token(TOKEN).build()
+        
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("run", manual_run))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
+        application.add_error_handler(error_handler)
+        
+        logger.info("Бот запускается...")
+        application.run_polling()
+        
+    except Exception as e:
+        logger.error(f"Фатальная ошибка: {e}")
+        raise
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
