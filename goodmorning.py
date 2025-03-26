@@ -254,8 +254,8 @@ try:
     # Проверка статуса и получение изображения
     images_base64 = api.check_generation(uuid)
 
-    bot_token = '7825529193:AAGKdoPMszeNFnZ50ur0IAJ0K_Myp2g1B7k'  # Токен вашего Telegram бота
-    channel_id = '@checkhyppo'  # ID вашего канала (с @ на начале)
+    bot_token = '7825529193:AAH06S3J0b5NhvxqXI8UK7vte-HTddsC7vc'  # Токен вашего Telegram бота
+    channel_id = '@hyppolove'  # ID вашего канала (с @ на начале)
 
     # Форматируем текст сообщения
     caption = post  # Убедитесь, что переменная `post` заранее заполнена
