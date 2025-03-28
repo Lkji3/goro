@@ -88,7 +88,8 @@ class PostBot:
             [InlineKeyboardButton("Утренний пост", callback_data='morning')],
             [InlineKeyboardButton("Дневной пост", callback_data='day')],
             [InlineKeyboardButton("Ночной пост", callback_data='night')],
-            [InlineKeyboardButton("Проверить статус", callback_data='status')]
+            [InlineKeyboardButton("Проверить статус", callback_data='status')],
+            [InlineKeyboardButton("🔄 Рестарт бота", callback_data='restart')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text('Выберите действие:', reply_markup=reply_markup)
@@ -104,6 +105,9 @@ class PostBot:
         elif query.data == 'status':
             status = "\n".join([f"{name}: {count} попыток" for name, count in self.retry_counts.items()])
             await query.edit_message_text(text=f"📊 Статус постов:\n{status}")
+        elif query.data == 'restart':
+            await query.edit_message_text(text="🔄 Инициирую перезапуск бота...")
+            os.execv(sys.executable, ['python'] + sys.argv)
         else:
             await query.edit_message_text(text="❌ Неизвестная команда")
 
