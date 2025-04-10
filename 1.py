@@ -1,218 +1,97 @@
-import os
-import logging
-from datetime import time, datetime
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters
-)
-import subprocess
+import requests
+from bs4 import BeautifulSoup
+from telegram import Bot
+from telegram.error import RetryAfter
+import asyncio
 
-# Настройка логирования
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-    handlers=[
-        logging.FileHandler("script_bot.log"),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+# Конфигурация (ЗАМЕНИТЕ НА СВОИ ДАННЫЕ!)
+BOT_TOKEN = "7825529193:AAEIIA_IrpWM4bb1EGqAWrBxJABlZKko7sE"  # Замените на ваш токен
+CHANNEL_ID = -1002419012006   # Замените на ID вашего канала
 
-# Конфигурация
-TOKEN = "7825529193:AAH06S3J0b5NhvxqXI8UK7vte-HTddsC7vc"  # Замените на токен от @BotFather
-YOUR_USERNAME = "lkji33"  # Ваш Telegram username (без @)
-SCRIPT_PATHS = {
-    "morning": "goodmorning.py",
-    "day": "1.py",
-    "night": "goodnight.py",
+# Список знаков зодиака с эмодзи
+ZODIAC_SIGNS = {
+    "Овен": {"number": 1, "emoji": "♈️"},
+    "Телец": {"number": 2, "emoji": "♉️"},
+    "Близнецы": {"number": 3, "emoji": "♊️"},
+    "Рак": {"number": 4, "emoji": "♋️"},
+    "Лев": {"number": 5, "emoji": "♌️"},
+    "Дева": {"number": 6, "emoji": "♍️"},
+    "Весы": {"number": 7, "emoji": "♎️"},
+    "Скорпион": {"number": 8, "emoji": "♏️"},
+    "Стрелец": {"number": 9, "emoji": "♐️"},
+    "Козерог": {"number": 10, "emoji": "♑️"},
+    "Водолей": {"number": 11, "emoji": "♒️"},
+    "Рыбы": {"number": 12, "emoji": "♓️"},
 }
 
-# Расписание выполнения
-SCHEDULE = {
-    "morning": time(7, 0),  # 7:00
-    "day": time(20, 0),     # 20:00
-    "night": time(23, 0),   # 23:00
-}
+def get_horoscope(sign: int, day: str = "tomorrow") -> str:
+    """Получает гороскоп для знака зодиака."""
+    url = f"https://www.horoscope.com/us/horoscopes/general/horoscope-general-daily-{day}.aspx?sign={sign}"
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.text, "html.parser")
+        horoscope_text = soup.find("div", class_="main-horoscope")
+        return horoscope_text.p.text.strip() if horoscope_text else "Гороскоп не найден."
+    return "Ошибка при получении гороскопа."
 
-# Клавиатура с кнопками
-KEYBOARD = ReplyKeyboardMarkup(
-    [["☀ Утро", "🌆 День", "🌙 Ночь"]],
-    resize_keyboard=True,
-    one_time_keyboard=False
-)
-
-def run_script(script_name: str) -> dict:
-    """Запускает скрипт и возвращает результат"""
-    result = {
-        "success": False,
-        "output": "",
-        "error": "",
-        "script": script_name,
-        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "filename": SCRIPT_PATHS.get(script_name, "unknown"),
+def translate_date(date: str) -> str:
+    """Переводит дату с английского на русский (например, 'Mar 23, 2025' → '23 марта')."""
+    month_translation = {
+        "Jan": "января", "Feb": "февраля", "Mar": "марта", "Apr": "апреля",
+        "May": "мая", "Jun": "июня", "Jul": "июля", "Aug": "августа",
+        "Sep": "сентября", "Oct": "октября", "Nov": "ноября", "Dec": "декабря",
     }
+    parts = date.split()
+    if len(parts) == 3:
+        month_en, day, _ = parts
+        return f"{day} {month_translation.get(month_en, month_en)}"
+    return date
 
-    if script_name not in SCRIPT_PATHS:
-        result["error"] = "Скрипт не найден в конфигурации"
-        return result
+def extract_date(text: str) -> str:
+    """Извлекает дату из текста гороскопа."""
+    return translate_date(text.split(" - ")[0]) if " - " in text else ""
 
-    script_path = SCRIPT_PATHS[script_name]
-    if not os.path.exists(script_path):
-        result["error"] = f"Файл {script_path} не существует"
-        return result
+def clean_horoscope_text(text: str) -> str:
+    """Удаляет дату из текста гороскопа."""
+    return text.split(" - ", 1)[1] if " - " in text else text
 
-    try:
-        process = subprocess.run(
-            ["python", script_path],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        result.update({
-            "output": process.stdout.strip(),
-            "error": process.stderr.strip(),
-            "success": True
-        })
-    except subprocess.CalledProcessError as e:
-        result.update({
-            "output": e.stdout.strip(),
-            "error": e.stderr.strip(),
-            "success": False
-        })
-    except Exception as e:
-        result["error"] = str(e)
-
-    return result
-
-async def send_log_to_user(update: Update, result: dict):
-    """Отправляет лог выполнения"""
-    try:
-        status = "✅ УСПЕШНО" if result["success"] else "❌ ОШИБКА"
-        message = (
-            f"🕒 Время: {result['time']}\n"
-            f"📜 Скрипт: {result['script']} ({result['filename']})\n"
-            f"🔹 Статус: {status}\n"
-        )
-
-        if result["output"]:
-            message += f"\n📝 Вывод:\n{result['output']}\n"
-        if result["error"]:
-            message += f"\n⚠ Ошибки:\n{result['error']}\n"
-
-        await update.message.reply_text(message, reply_markup=KEYBOARD)
-    except Exception as e:
-        logger.error(f"Ошибка при отправке сообщения: {e}")
-
-async def callback_morning(context: ContextTypes.DEFAULT_TYPE):
-    """Утренний скрипт"""
-    result = run_script("morning")
-    await send_log_to_user(context.job, result)
-
-async def callback_day(context: ContextTypes.DEFAULT_TYPE):
-    """Дневной скрипт"""
-    result = run_script("day")
-    await send_log_to_user(context.job, result)
-
-async def callback_night(context: ContextTypes.DEFAULT_TYPE):
-    """Вечерний скрипт"""
-    result = run_script("night")
-    await send_log_to_user(context.job, result)
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Инициализация бота"""
-    if update.effective_user.username != YOUR_USERNAME:
-        await update.message.reply_text("⛔ Доступ запрещен!")
-        return
-
-    # Удаляем старые задания
-    for job in context.job_queue.jobs():
-        job.schedule_removal()
-
-    # Добавляем новые задания
-    context.job_queue.run_daily(callback_morning, time=SCHEDULE["morning"])
-    context.job_queue.run_daily(callback_day, time=SCHEDULE["day"])
-    context.job_queue.run_daily(callback_night, time=SCHEDULE["night"])
-
-    await update.message.reply_text(
-        "🤖 Бот запущен! Расписание:\n"
-        f"☀ Утро 07:00 - goodmorning.py\n"
-        f"🌆 День 20:00 - 1.py\n"
-        f"🌙 Ночь 23:00 - goodnight.py\n\n"
-        "Используйте кнопки ниже для запуска скриптов:",
-        reply_markup=KEYBOARD
+def translate_to_russian(text: str) -> str:
+    """Переводит текст на русский с помощью MyMemory API."""
+    response = requests.get(
+        "https://api.mymemory.translated.net/get",
+        params={"q": text, "langpair": "en|ru"}
     )
+    if response.status_code == 200:
+        return response.json().get("responseData", {}).get("translatedText", text)
+    return text
 
-async def manual_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ручной запуск скрипта через команду"""
-    if update.effective_user.username != YOUR_USERNAME:
-        await update.message.reply_text("⛔ Доступ запрещен!")
-        return
+async def publish_horoscopes():
+    """Отправляет гороскопы для всех знаков зодиака."""
+    bot = Bot(token=BOT_TOKEN)
+    for sign_name, sign_data in ZODIAC_SIGNS.items():
+        try:
+            # Получаем и обрабатываем гороскоп
+            horoscope_en = get_horoscope(sign_data["number"])
+            date = extract_date(horoscope_en)
+            text_cleaned = clean_horoscope_text(horoscope_en)
+            text_ru = translate_to_russian(text_cleaned)
+            
+            # Формируем и отправляем сообщение
+            message = f"{sign_data['emoji']} {sign_name}, {date}:\n{text_ru}"
+            await bot.send_message(chat_id=CHANNEL_ID, text=message)
+            
+            # Пауза между сообщениями (30 секунд)
+            await asyncio.sleep(30)
+            
+        except RetryAfter as e:
+            await asyncio.sleep(e.retry_after)
+        except Exception as e:
+            print(f"Ошибка для {sign_name}: {e}")
 
-    if not context.args:
-        await update.message.reply_text("Используйте: /run <morning|day|night>")
-        return
-
-    script_name = context.args[0].lower()
-    if script_name not in SCRIPT_PATHS:
-        await update.message.reply_text("Доступные скрипты: morning, day, night")
-        return
-
-    await update.message.reply_text(f"⏳ Запускаю {script_name}...")
-    result = run_script(script_name)
-    await send_log_to_user(update, result)
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик нажатий кнопок"""
-    if update.effective_user.username != YOUR_USERNAME:
-        await update.message.reply_text("⛔ Доступ запрещен!")
-        return
-
-    text = update.message.text
-    script_map = {
-        "☀ Утро": "morning",
-        "🌆 День": "day",
-        "🌙 Ночь": "night"
-    }
-
-    if text not in script_map:
-        await update.message.reply_text("Используйте кнопки для запуска скриптов")
-        return
-
-    script_name = script_map[text]
-    await update.message.reply_text(f"⏳ Запускаю {script_name} скрипт...")
-    result = run_script(script_name)
-    await send_log_to_user(update, result)
-
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка ошибок"""
-    logger.error(f"Ошибка: {context.error}")
-    if update and isinstance(update, Update):
-        if update.effective_user.username == YOUR_USERNAME:
-            await update.message.reply_text(
-                f"⚠ Ошибка: {context.error}",
-                reply_markup=KEYBOARD
-            )
-
-def main():
-    """Основная функция запуска"""
-    try:
-        application = Application.builder().token(TOKEN).build()
-        
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("run", manual_run))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
-        application.add_error_handler(error_handler)
-        
-        logger.info("Бот запускается...")
-        application.run_polling()
-        
-    except Exception as e:
-        logger.error(f"Фатальная ошибка: {e}")
-        raise
+async def main():
+    """Основная функция."""
+    await publish_horoscopes()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
